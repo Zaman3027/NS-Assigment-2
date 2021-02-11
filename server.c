@@ -3,12 +3,15 @@
 #include<string.h>
 #include<netdb.h>
 #include<stdlib.h>
-#include<pthread.h>
 
 #define BUFFER_SIZE 1024
 #define PORT 8080
 
-void *receive();
+#define SERVER_N "client_n.key"
+#define SERVER_V "client_v.key"
+
+void receive();
+void writeFile(FILE *fptr, char *buffer,char *fileName);
 
 int temp_sock_desc = 0;
 
@@ -23,8 +26,7 @@ int main() {
     memset(&client,0,sizeof(client));
 
     sock_desc=socket(AF_INET,SOCK_STREAM,0);
-    if(sock_desc==-1)
-    {
+    if(sock_desc==-1) {
         printf("Error in socket creation");
         exit(1);
     }
@@ -51,40 +53,55 @@ int main() {
         printf("Error in temporary socket creation");
         exit(1);
     }
-
-    pthread_t thread_id;
-    if(pthread_create(&thread_id,NULL,receive,NULL)) {
-        printf("ERROR : Creating thread \n");
-        exit(1);
-    }
-
-    while(fgets(buf,BUFFER_SIZE,stdin)!=NULL) {
-        if(strncmp(buf,"end",3)==0)
-            break;
-
-        k=send(temp_sock_desc,buf,BUFFER_SIZE,0);
-        if(k==-1) {
-            printf("Error in sending");
-            exit(1);
-        }
-    }
-    pthread_join(thread_id,(void **)NULL);
-    pthread_exit(NULL);
+    receive();
     exit(0);
     return 0;
 }
 
-void *receive() {
+void receive() {
+    FILE *sPublic;
     int k;
-    char buf[BUFFER_SIZE];
+    char buffer[BUFFER_SIZE];
     while (1) {
-        k=recv(temp_sock_desc,buf,BUFFER_SIZE,0);
-        if(k==-1) {
-            printf("Error in receiving");
-            exit(1);
-        }
+        k=recv(temp_sock_desc,buffer,BUFFER_SIZE,0);
+        printf("%c \n",buffer[0]);
+        int a = 0;
 
-        printf("Message got from server is : %s",buf);
+        switch (buffer[0]) {
+        case '1':
+           recv(temp_sock_desc,buffer,BUFFER_SIZE,0);
+           writeFile(sPublic,buffer,SERVER_N);
+           printf("Public key n %s\n",buffer);
+           recv(temp_sock_desc,buffer,BUFFER_SIZE,0);
+           writeFile(sPublic,buffer,SERVER_V);
+           printf("Public key v %s\n",buffer);
+           break;
+        case '2':
+           //TODO: Authentication 
+           printf("Authentication \n");
+           break;
+        case '3':
+           //TODO: Update Key
+           printf("Update Key\n");
+           break;
+        case '4':
+           //TODO: End the application
+           exit(1);
+           break;
+
+        default:
+            break;
+        }
     }
     
+}
+
+void writeFile(FILE *fptr, char *buffer,char *fileName) {
+    fptr = fopen(fileName,"w");
+    if(fptr==NULL) {
+        printf("Unable to write file %s\n",fileName);
+        exit(1);
+    }
+    fputs(buffer,fptr);
+    fclose(fptr);
 }
