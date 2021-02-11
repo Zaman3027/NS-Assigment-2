@@ -4,6 +4,7 @@
 #include<netdb.h>
 #include<stdlib.h>
 #include "../miracl.h"
+
 #define BUFFER_SIZE 1024
 #define PORT 8080
 #define CLIENT_N "client_n.key"
@@ -15,6 +16,10 @@ int sock_desc;
 big generateKey();
 big generateSprivate(big key);
 big generateVpublic(big key, big s);
+big readFile(char *fileName);
+big bigPow(big a, big b);
+big generateX(big r,big n);
+big generateY(big r, big s, big e,big n);
 
 void writeFile(FILE *fptr, char *buffer,char *fileName);
 
@@ -46,10 +51,15 @@ int main() {
 
     //MIRACL set-up
     miracl *mir = mirsys(1024,10);
-    big key,s,v;
+    big key,s,v,x,r,n,y,e;
     key = mirvar(0);
     s = mirvar(0);
     v = mirvar(0);
+    x = mirvar(0);
+    r = mirvar(0);
+    n = mirvar(0);
+    y = mirvar(0);
+    e = mirvar(0);
 
     //Client - Server data exchange
     while (1) {
@@ -68,10 +78,39 @@ int main() {
             otstr(v,buffer);
             send(sock_desc,buffer,BUFFER_SIZE,0);
             printf("Public V key %s\n",buffer);
+            printf("\n");
+
             break;
             case '2':
-            //TODO: Authentication 
-            printf("Authentication \n");
+            //TODO: Authentication
+            for(int i = 0; i<5; i++) {
+                printf("Authentication \n");
+                irand(2526);
+                n = readFile(CLIENT_N);
+                bigrand(n,r);
+                x = generateX(r,n);
+                otstr(x,buffer);
+                send(sock_desc,buffer,BUFFER_SIZE,0);
+                printf("Send x %s \n",buffer);
+                recv(sock_desc,buffer,BUFFER_SIZE,0);
+                printf("Recived e %s \n",buffer);
+                cinstr(e,buffer);
+                s = readFile(CLIENT_S);
+                y = generateY(r,s,e,n);
+                otstr(y,buffer);
+                send(sock_desc,buffer,BUFFER_SIZE,0);
+                printf("Send y %s \n",buffer);
+                recv(sock_desc,buffer,BUFFER_SIZE,0);
+                printf("Recived %s \n",buffer+2);
+                if(buffer[0]=='0') break;
+                if(i!=4) {
+                    buffer[0] = '2';
+                    send(sock_desc,buffer,BUFFER_SIZE,0);
+                }
+
+                printf("\n");
+
+            }
             break;
             case '3':
             //TODO: Update Key
@@ -138,6 +177,18 @@ big generateVpublic(big key, big s) {
     writeFile(sFile,buffer,CLIENT_V);
     return v;
 }
+
+big generateY(big r, big s, big e,big n) {
+    big k = mirvar(0);
+    big y = mirvar(0);
+    if(mr_compare(e,mirvar(0))==0) {
+        k = mirvar(1);
+    }else copy(s,k);
+    multiply(r,k,k);
+    powmod(k,mirvar(1),n,y);
+    return y;
+}
+
 void writeFile(FILE *fptr, char *buffer,char *fileName) {
     fptr = fopen(fileName,"w");
     if(fptr==NULL) {
@@ -147,3 +198,40 @@ void writeFile(FILE *fptr, char *buffer,char *fileName) {
     fputs(buffer,fptr);
     fclose(fptr);
 }
+
+big readFile(char *fileName) {
+    FILE *fptr;
+    fptr = fopen(fileName,"r");
+    char buffer[BUFFER_SIZE];
+    if(fptr == NULL) {
+        printf("ERROR reading file %s\n",fileName);
+        exit(1);
+    }
+    fgets(buffer,BUFFER_SIZE,fptr);
+    fclose(fptr);
+    big n = mirvar(0);
+    cinstr(n,buffer);
+    otnum(n,stdout);
+    return n;
+}
+
+big generateX(big r,big n) {
+    big x = mirvar(0);
+    powmod(r,mirvar(2),n,x);
+    return x;
+}
+
+big bigPow(big a, big b) {
+    big c = mirvar(0);
+    if(mr_compare(b,mirvar(0))==0) return mirvar(1);
+    subdiv(b,2,c);
+    big k = bigPow(a,c);
+    big d = mirvar(1);
+    multiply(k,k,d);
+    if(!subdivisible(b,2)) {
+        multiply(d,a,d);
+    }
+    return d;
+}
+
+
